@@ -3,7 +3,9 @@ import os
 import cv2
 import numpy as np
 
+from PIL import Image
 from tqdm import tqdm
+from configparser import ConfigParser, NoOptionError
 
 def trans_2_coco_format(annotation_path, output_path, info=None):
     """將自己的標註轉換成 coco 格式
@@ -118,3 +120,78 @@ def get_class_id(class_name, class_dict):
         }
         return class_dict[class_name]["id"]
 
+def get_cv_img_from_PIL(img_path: str):
+    pil_img = Image.open(img_path).convert("RGB")
+    cv_img = cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)
+    return cv_img
+
+class ImgTrainingSetting():
+    def __init__(self, dir_path : str):
+
+        # 開啟設定檔
+        self.config = ConfigParser()
+        self.config.optionxform = str
+
+        if os.path.exists(os.path.join(dir_path, 'settings.ini')):
+            self.config.read(os.path.join(dir_path, 'settings.ini'))
+        else:
+            self.config["Training_Settings"] = { 
+                                            'IsTrain': 'True',
+                                            'LabelFile': 'Label.json',
+                                            'ImgScaling': 1.0,
+                                            'HorizontalFlip': 'False',
+                                            'VerticalFlip': 'False'
+                                        }
+            with open(os.path.join(dir_path, 'settings.ini'), 'w') as file:
+                self.config.write(file)
+        
+
+    def isTrain(self):
+        result = True
+        try:
+            result = self.config.getboolean('Training_Settings', 'IsTrain')
+        except :
+            self.config['Training_Settings']['IsTrain'] = 'True'
+            with open(os.path.join(self.dir_path, 'settings.ini'), 'w') as sf:
+                self.config.write(sf)
+        return result
+
+    def labelFileName(self):
+        result = 'Label.json'
+        try:
+            result = self.config.get('Training_Settings', 'LabelFile')
+        except NoOptionError:
+            self.config['Training_Settings']['LabelFile'] = result
+            with open(os.path.join(self.dir_path, 'settings.ini'), 'w') as sf:
+                self.config.write(sf)
+        return result
+
+    def scalingRatio(self):
+        result = 0.5
+        try:
+            result = float(self.config.get('Training_Settings', 'ImgScaling'))
+        except NoOptionError:
+            self.config['Training_Settings']['ImgScaling'] = result
+            with open(os.path.join(self.dir_path, 'settings.ini'), 'w') as sf:
+                self.config.write(sf)
+        return result
+    
+    def horizontalFlip(self):
+        result = False
+        try:
+            result = self.config.getboolean('Training_Settings', 'HorizontalFlip')
+        except NoOptionError:
+            self.config['Training_Settings']['HorizontalFlip'] = 'False'
+            with open(os.path.join(self.dir_path, 'settings.ini'), 'w') as sf:
+                self.config.write(sf)
+        return result
+    
+    def verticalFlip(self):
+        result = False
+        try:
+            result = self.config.getboolean('Training_Settings', 'VerticalFlip')
+        except NoOptionError:
+            self.config['Training_Settings']['VerticalFlip'] = 'False'
+            with open(os.path.join(self.dir_path, 'settings.ini'), 'w') as sf:
+                self.config.write(sf)
+        return result
