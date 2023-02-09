@@ -1,0 +1,1 @@
+{"name_id_table": {"car": {"supercategory": "vehicle", "id": 0}, "scooter": {"supercategory": "vehicle", "id": 1}, "other": {"supercategory": "unkown", "id": 2}, "calculated": {"supercategory": "vehicle", "id": 3}, "unkwon": {"supercategory": "unkown", "id": 4}}}
