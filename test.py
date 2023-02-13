@@ -8,6 +8,7 @@ import numpy as np
 import cv2
 
 import utils
+import dataset
 
 class Detector:
     def __init__(self) -> None:
@@ -40,6 +41,7 @@ class Detector:
         cv2.waitKey(0)
 
 if __name__ == "__main__":
-    detector = Detector()
+    # detector = Detector()
 
-    detector.on_img("E:\Label-Datas\新竹十興\Side\DJI_0036.JPG")
+    # detector.on_img("E:\Label-Datas\新竹十興\Side\DJI_0036.JPG")
+    print(dataset.get_datasets("E:\Datasets\Landscape"))
