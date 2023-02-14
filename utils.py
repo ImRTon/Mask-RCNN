@@ -371,6 +371,8 @@ class DatasetSetting():
                 self.config['Dataset_Settings']['Train'] = result
                 with open(os.path.join(self.dir_path, 'settings.ini'), 'w') as sf:
                     self.config.write(sf)
+        if result is not None:
+            return os.path.join(self.dir_path, result)
         return result
 
     def get_val_dataset(self):
@@ -382,6 +384,8 @@ class DatasetSetting():
                 self.config['Dataset_Settings']['Val'] = result
                 with open(os.path.join(self.dir_path, 'settings.ini'), 'w') as sf:
                     self.config.write(sf)
+        if result is not None:
+            return os.path.join(self.dir_path, result)
         return result
 
     def get_test_dataset(self):
@@ -393,6 +397,8 @@ class DatasetSetting():
                 self.config['Dataset_Settings']['Test'] = result
                 with open(os.path.join(self.dir_path, 'settings.ini'), 'w') as sf:
                     self.config.write(sf)
+        if result is not None:
+            return os.path.join(self.dir_path, result)
         return result
     
 def str_2_bool(s):

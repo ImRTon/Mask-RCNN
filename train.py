@@ -54,5 +54,3 @@ if __name__ == "__main__":
     trainer = DefaultTrainer(cfg) 
     trainer.resume_or_load(resume=False)
     trainer.train()
-    checkpointer = DetectionCheckpointer(trainer.model, save_dir="output")
-    checkpointer.save("MaskRCNN")  # save to output/model_999.pth
