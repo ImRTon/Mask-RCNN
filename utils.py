@@ -129,6 +129,10 @@ def get_cv_img_from_PIL(img_path: str):
     cv_img = cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)
     return cv_img
 
+def save_cv_img_from_PIL(img, img_path):
+    pil_img = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    pil_img.save(img_path)
+
 def combine_to_1_dataset(settings, split_ratio, output_dir):
     if not os.path.exists(output_dir):
         print(f"ERROR! {output_dir} did not exist!")
