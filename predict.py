@@ -58,23 +58,24 @@ if __name__ == "__main__":
 
     cfg.MODEL.WEIGHTS = args.checkpoint  # path to the model we just trained
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.6   # set a custom testing threshold
-    # predictor = DefaultPredictor(cfg)
+    predictor = DefaultPredictor(cfg)
 
-    evaluator = COCOEvaluator("val", output_dir=args.output_dir)
-    # print(inference_on_dataset(predictor.model, predictor.test, evaluator))
-    trainer = DefaultTrainer(cfg) 
-    trainer.resume_or_load(resume=True)
-    trainer.test(cfg, trainer.model, evaluator)
+    # evaluator = COCOEvaluator("val", output_dir=args.output_dir)
+    # # print(inference_on_dataset(predictor.model, predictor.test, evaluator))
+    # trainer = DefaultTrainer(cfg) 
+    # trainer.resume_or_load(resume=True)
+    # trainer.test(cfg, trainer.model, evaluator)
 
-    # val_dir_path = "/workspace/Datasets/LandscapeCoco/test"
-    # for filename in tqdm(os.listdir(val_dir_path)):
-    #     if filename.endswith('.jpg') or filename.endswith('.JPG') or filename.endswith('.png'):
-    #         img = utils.get_cv_img_from_PIL(os.path.join(val_dir_path, filename))
-    #         outputs = predictor(img)  # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
-    #         v = Visualizer(img[:, :, ::-1],
-    #                     metadata=MetadataCatalog.get(cfg.DATASETS.TEST[0]), 
-    #                     scale=0.5, 
-    #                     instance_mode=ColorMode.IMAGE_BW   # remove the colors of unsegmented pixels. This option is only available for segmentation models
-    #         )
-    #         out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-    #         utils.save_cv_img_from_PIL(out.get_image()[:, :, ::-1], os.path.join(args.output_dir, filename))
+    val_dir_path = "/workspace/Datasets/LandscapeCoco/test"
+    for filename in tqdm(os.listdir(val_dir_path)):
+        if filename.endswith('.jpg') or filename.endswith('.JPG') or filename.endswith('.png'):
+            img = utils.get_cv_img_from_PIL(os.path.join(val_dir_path, filename))
+            img = utils.scale_down_img(img, 1280)
+            outputs = predictor(img)  # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
+            v = Visualizer(img[:, :, ::-1],
+                        metadata=MetadataCatalog.get(cfg.DATASETS.TEST[0]), 
+                        scale=0.5, 
+                        instance_mode=ColorMode.IMAGE_BW   # remove the colors of unsegmented pixels. This option is only available for segmentation models
+            )
+            out = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+            utils.save_cv_img_from_PIL(out.get_image()[:, :, ::-1], os.path.join(args.output_dir, filename))

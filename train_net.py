@@ -38,6 +38,8 @@ from detectron2.evaluation import (
 )
 from detectron2.modeling import GeneralizedRCNNWithTTA
 
+import dataset
+
 
 def build_evaluator(cfg, dataset_name, output_folder=None):
     """
@@ -116,6 +118,18 @@ def setup(args):
     cfg = get_cfg()
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+
+    os.makedirs(cfg.OUTPUT_DIR, exist_ok=True)
+    cfg.OUTPUT_DIR = args.output_dir
+    cfg.DATASETS.TRAIN = ("train",)
+    cfg.DATASETS.TEST = ("val",)
+    cfg.SOLVER.IMS_PER_BATCH = 16  # This is the real "batch size" commonly known to deep learning people
+    cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
+    cfg.SOLVER.MAX_ITER = 2000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
+    cfg.SOLVER.STEPS = []        # do not decay learning rate
+    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512   # The "RoIHead batch size". 128 is faster, and good enough for this toy dataset (default: 512)
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES = 5  # only has one class (ballon). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
+
     cfg.freeze()
     default_setup(cfg, args)
     return cfg
@@ -141,6 +155,8 @@ def main(args):
     consider writing your own training loop (see plain_train_net.py) or
     subclassing the trainer.
     """
+    train_dir_path, val_dir_path, test_dir_path = dataset.register_datasets_from_setting(args.input_data)
+
     trainer = Trainer(cfg)
     trainer.resume_or_load(resume=args.resume)
     if cfg.TEST.AUG.ENABLED:
@@ -151,7 +167,18 @@ def main(args):
 
 
 if __name__ == "__main__":
-    args = default_argument_parser().parse_args()
+    parser = default_argument_parser()
+    parser.add_argument('--input_data', '-i', default='Root dir of input dataset',
+                        metavar='FILE', required=True,
+                        help="Specify the file in which the annotation is stored")
+    parser.add_argument('--output_dir', '-o', default='Root dir of input dataset',
+                        metavar='FILE', required=True,
+                        help="Specify the file in which the annotation is stored")
+    parser.add_argument('--model', '-m', default='COCO-InstanceSegmentation/mask_rcnn_R_101_FPN_3x.yaml',
+                        type=str,
+                        help="Specify the model type in detectron2 configs")
+    args = parser.parse_args()
+
     print("Command Line Args:", args)
     launch(
         main,

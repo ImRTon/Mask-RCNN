@@ -49,6 +49,7 @@ def register_datasets_from_setting(dataset_root_dir):
 
     if train_dir_path is not None:
         train_setting = get_dataset_settings([train_dir_path])[0]
+        print(f"Registering label:{os.path.join(train_setting.dir_path, train_setting.labelFileName())}, data_path:{train_setting.dir_path} as train dataset")
         register_coco_instances(f"train", {}, \
                                 os.path.join(train_setting.dir_path, train_setting.labelFileName()), train_setting.dir_path)
         

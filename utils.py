@@ -408,3 +408,12 @@ def str_2_bool(s):
          return False
     else:
         raise ValueError
+    
+def scale_down_img(img, target_res):
+    img_h, img_w, _ = img.shape
+    if img_h > img_w:
+        scale = target_res / img_h
+    else:
+        scale = target_res / img_w
+    img = cv2.resize(img, (int(img_w * scale), int(img_h * scale)))
+    return img
