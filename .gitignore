@@ -6,6 +6,7 @@ models/*
 checkpoints/*
 
 # Outputs
+output/*
 outputs/*
 predicts/*
 

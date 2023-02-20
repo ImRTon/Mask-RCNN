@@ -1,7 +1,7 @@
 # Mask-RCNN
 > implemented by ImRTon
 
-> PyTorch, Lightning
-> COCO RLE format
+> PyTorch, Detectron2
+> Dataset in COCO format
 
 
