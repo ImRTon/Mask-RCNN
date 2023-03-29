@@ -18,12 +18,14 @@ You may want to write your own script with your datasets and other customization
 
 import logging
 import os
+import json
 from collections import OrderedDict
+from pathlib import Path
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.config import get_cfg
-from detectron2.data import MetadataCatalog
+from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.engine import DefaultTrainer, default_argument_parser, default_setup, hooks, launch
 from detectron2.evaluation import (
     CityscapesInstanceEvaluator,
@@ -39,6 +41,7 @@ from detectron2.evaluation import (
 from detectron2.modeling import GeneralizedRCNNWithTTA
 
 import dataset
+import utils
 
 
 def build_evaluator(cfg, dataset_name, output_folder=None):
@@ -155,7 +158,10 @@ def main(args):
     consider writing your own training loop (see plain_train_net.py) or
     subclassing the trainer.
     """
-    train_dir_path, val_dir_path, test_dir_path = dataset.register_datasets_from_setting(args.input_data)
+    # train_dir_path, val_dir_path, test_dir_path = dataset.register_datasets_from_setting(args.input_data)
+    # 1. register a function which returns dicts
+    DatasetCatalog.register("train", lambda: utils.get_label(Path(args.input_data) / "detectron2_train.json"))
+    DatasetCatalog.register("val", lambda: utils.get_label(Path(args.input_data) / "detectron2_val.json"))
 
     trainer = Trainer(cfg)
     trainer.resume_or_load(resume=args.resume)

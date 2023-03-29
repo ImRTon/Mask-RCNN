@@ -13,6 +13,8 @@ train.init_checkpoint = (
     "detectron2://ImageNetPretrained/MAE/mae_pretrain_vit_large.pth?matching_heuristics=True"
 )
 
+dataloader.train.total_batch_size = 2
+
 model.backbone.net.embed_dim = 1024
 model.backbone.net.depth = 24
 model.backbone.net.num_heads = 16

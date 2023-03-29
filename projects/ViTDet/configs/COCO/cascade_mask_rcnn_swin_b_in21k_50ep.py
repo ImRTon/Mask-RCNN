@@ -6,7 +6,9 @@ from detectron2.solver import WarmupParamScheduler
 from detectron2.modeling import SwinTransformer
 
 from ..common.coco_loader_lsj import dataloader
-from .cascade_mask_rcnn_mvitv2_b_in21k_100ep import model
+from .cascade_mask_rcnn_mvitv2_b_in21k_100ep_swin import model
+
+dataloader.train.total_batch_size = 8
 
 model.backbone.bottom_up = L(SwinTransformer)(
     depths=[2, 2, 18, 2],
@@ -25,11 +27,23 @@ train.init_checkpoint = "detectron2://ImageNetPretrained/swin/swin_base_patch4_w
 
 # Schedule
 # 100 ep = 184375 iters * 64 images/iter / 118000 images/ep
-train.max_iter = 184375
+# train.max_iter = 184375
+# lr_multiplier = L(WarmupParamScheduler)(
+#     scheduler=L(MultiStepParamScheduler)(
+#         values=[1.0, 0.1, 0.01],
+#         milestones=[163889, 177546],
+#         num_updates=train.max_iter,
+#     ),
+#     warmup_length=250 / train.max_iter,
+#     warmup_factor=0.001,
+# )
+
+# 100 ep = 14683 iters * 6 images/iter / 881 images/ep
+train.max_iter = 14684
 lr_multiplier = L(WarmupParamScheduler)(
     scheduler=L(MultiStepParamScheduler)(
         values=[1.0, 0.1, 0.01],
-        milestones=[163889, 177546],
+        milestones=[13052, 14140],
         num_updates=train.max_iter,
     ),
     warmup_length=250 / train.max_iter,

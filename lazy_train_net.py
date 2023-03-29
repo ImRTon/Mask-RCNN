@@ -28,6 +28,17 @@ from detectron2.engine import (
 from detectron2.engine.defaults import create_ddp_model
 from detectron2.evaluation import inference_on_dataset, print_csv_format
 from detectron2.utils import comm
+from detectron2.utils.visualizer import Visualizer, ColorMode
+from detectron2.data import MetadataCatalog, DatasetCatalog
+
+from tqdm import tqdm
+from pathlib import Path
+import os
+import torch
+import cv2
+
+import utils as my_utils
+
 
 logger = logging.getLogger("detectron2")
 
@@ -39,6 +50,35 @@ def do_test(cfg, model):
         )
         print_csv_format(ret)
         return ret
+
+
+def do_inference(model, input_path, output_path):
+    model.eval()
+    with torch.no_grad():
+        for filename in tqdm(os.listdir(input_path)):
+            if filename.endswith('.jpg') or filename.endswith('.JPG') or filename.endswith('.png'):
+                original_image = my_utils.get_cv_img_from_PIL(os.path.join(input_path, filename))
+                if True:
+                    # whether the model expects BGR inputs or RGB
+                    original_image = original_image[:, :, ::-1]
+                o_height, o_width, _ = original_image.shape
+                scaled_image = my_utils.scale_down_img(original_image, 2048)
+                height, width, _ = scaled_image.shape
+                # original_image = original_image.resize((width // 4, height // 4))
+                # image = self.aug.get_transform(original_image).apply_image(original_image)
+                image = torch.as_tensor(scaled_image.astype("float32").transpose(2, 0, 1))
+
+                inputs = {"image": image, "height": o_height, "width": o_width}
+                outputs = model([inputs])[0]
+                # outputs = model([inputs])  # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
+                v = Visualizer(original_image[:, :, ::-1],
+                            metadata=MetadataCatalog.get("train"), 
+                            scale=0.5, 
+                            instance_mode=ColorMode.IMAGE_BW   # remove the colors of unsegmented pixels. This option is only available for segmentation models
+                )
+                filtered_outs = my_utils.filter_instance_masks(outputs, threshold=0.5)
+                out = v.draw_instance_predictions(filtered_outs)
+                my_utils.save_cv_img_from_PIL(out.get_image()[:, :, ::-1], os.path.join(output_path, filename))
 
 
 def do_train(args, cfg):
@@ -116,6 +156,12 @@ def main(args):
     # cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512   # The "RoIHead batch size". 128 is faster, and good enough for this toy dataset (default: 512)
     # cfg.MODEL.ROI_HEADS.NUM_CLASSES = 5  # only has one class (ballon). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
 
+    
+    DatasetCatalog.register("train", lambda: my_utils.get_label(Path(args.input_data) / "detectron2_train.json"))
+    DatasetCatalog.register("val", lambda: my_utils.get_label(Path(args.input_data) / "detectron2_val.json"))
+    MetadataCatalog.get("train").set(thing_classes=["panel", "bubble", "onomatopoeia", "text", "unkwon"])
+    MetadataCatalog.get("val").set(thing_classes=["panel", "bubble", "onomatopoeia", "text", "unkwon"])
+
     default_setup(cfg, args)
 
     if args.eval_only:
@@ -123,7 +169,8 @@ def main(args):
         model.to(cfg.train.device)
         model = create_ddp_model(model)
         DetectionCheckpointer(model).load(cfg.train.init_checkpoint)
-        print(do_test(cfg, model))
+        do_inference(model, args.input_data, args.output_dir)
+        # print(do_test(cfg, model))
     else:
         do_train(args, cfg)
 

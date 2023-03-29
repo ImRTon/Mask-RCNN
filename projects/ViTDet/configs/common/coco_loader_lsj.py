@@ -10,11 +10,11 @@ from detectron2.data import (
 )
 from detectron2.evaluation import COCOEvaluator
 
-register_coco_instances(f"train", {}, "/workspace/Datasets/LandscapeCoco/train/train_coco.json", \
-                            "/workspace/Datasets/LandscapeCoco/train")
+# register_coco_instances(f"train", {}, "/workspace/Datasets/LandscapeCoco/train/train_coco.json", \
+#                             "/workspace/Datasets/LandscapeCoco/train")
 
-register_coco_instances(f"val", {}, "/workspace/Datasets/LandscapeCoco/val/val_coco.json", \
-                            "/workspace/Datasets/LandscapeCoco/val")
+# register_coco_instances(f"val", {}, "/workspace/Datasets/LandscapeCoco/val/val_coco.json", \
+#                             "/workspace/Datasets/LandscapeCoco/val")
 
 # Data using LSJ
 image_size = 1024
@@ -53,6 +53,7 @@ dataloader.test = L(build_detection_test_loader)(
 
 dataloader.evaluator = L(COCOEvaluator)(
     dataset_name="val",
+    output_dir="output/inference",
 )
 
 dataloader.train.mapper.augmentations = [
