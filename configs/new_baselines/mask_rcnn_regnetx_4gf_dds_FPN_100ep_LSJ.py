@@ -9,6 +9,8 @@ from detectron2.config import LazyCall as L
 from detectron2.modeling.backbone import RegNet
 from detectron2.modeling.backbone.regnet import SimpleStem, ResBottleneckBlock
 
+dataloader.train.total_batch_size = 4
+
 # Config source:
 # https://github.com/facebookresearch/detectron2/blob/main/configs/COCO-InstanceSegmentation/mask_rcnn_regnetx_4gf_dds_fpn_1x.py  # noqa
 model.backbone.bottom_up = L(RegNet)(

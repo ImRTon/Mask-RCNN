@@ -36,6 +36,7 @@ from pathlib import Path
 import os
 import torch
 import cv2
+import json
 
 import utils as my_utils
 
@@ -80,6 +81,49 @@ def do_inference(model, input_path, output_path):
                 out = v.draw_instance_predictions(filtered_outs)
                 my_utils.save_cv_img_from_PIL(out.get_image()[:, :, ::-1], os.path.join(output_path, filename))
 
+def do_inference_2_coco(model, input_path, output_path, categories):
+    model.eval()
+
+    coco = {
+        "info": {},
+        "images": [],
+        "annotations": [],
+        "categories": categories,
+        "licenses": [],
+    }
+
+    img_count = 0
+
+    with torch.no_grad():
+        for filename in tqdm(os.listdir(input_path)):
+            if filename.endswith('.jpg') or filename.endswith('.JPG') or filename.endswith('.png'):
+                original_image = my_utils.get_cv_img_from_PIL(os.path.join(input_path, filename))
+                if True:
+                    # whether the model expects BGR inputs or RGB
+                    original_image = original_image[:, :, ::-1]
+                o_height, o_width, _ = original_image.shape
+
+                coco["images"].append({
+                    "file_name": filename,
+                    "height": o_height,
+                    "width": o_width,
+                    "id": img_count
+                })
+
+                scaled_image = my_utils.scale_down_img(original_image, 2048)
+                height, width, _ = scaled_image.shape
+                image = torch.as_tensor(scaled_image.astype("float32").transpose(2, 0, 1))
+
+                inputs = {"image": image, "height": o_height, "width": o_width}
+                # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
+                outputs = model([inputs])[0]
+
+                my_utils.get_prediction_2_coco(outputs, [img_count], coco, threshold=0.7, small_object_area=100)
+
+                img_count += 1
+
+    with open(output_path, 'w') as f:
+        json.dump(coco, f)
 
 def do_train(args, cfg):
     """
@@ -169,7 +213,10 @@ def main(args):
         model.to(cfg.train.device)
         model = create_ddp_model(model)
         DetectionCheckpointer(model).load(cfg.train.init_checkpoint)
-        do_inference(model, args.input_data, args.output_dir)
+        if args.output_2_coco:
+            do_inference_2_coco(model, args.input_data, args.output_dir)
+        else:
+            do_inference(model, args.input_data, args.output_dir)
         # print(do_test(cfg, model))
     else:
         do_train(args, cfg)
@@ -183,6 +230,8 @@ if __name__ == "__main__":
     parser.add_argument('--output_dir', '-o', default='Root dir of input dataset',
                         metavar='FILE', required=True,
                         help="Specify the file in which the annotation is stored")
+    parser.add_argument('--output-2-coco', '-co', action='store_true', 
+                        help='Output detection result to coco format')
     args = parser.parse_args()
     launch(
         main,

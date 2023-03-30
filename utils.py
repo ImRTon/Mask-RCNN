@@ -513,3 +513,40 @@ def filter_instance_masks(outputs, threshold=0.5):
     instances = outputs['instances'].to('cpu')
     filtered_instances = instances[instances.scores > threshold]
     return filtered_instances
+
+def get_prediction_2_coco(outputs, img_ids: List[int], coco_dict, threshold: float=0.5, small_object_area: int=0):
+    """Get detectron2 output to coco format
+
+    Args:
+        outputs (dict): output of detectron2 model.
+        img_ids (List[int]): image ids.
+        coco_dict (dict): coco format annotation dict.
+        thresh (float, optional): threshold of detection score. Defaults to 0.5.
+    """    
+    label_count = len(coco_dict["annotations"])
+    for idx, output in enumerate(outputs):
+        instance = output['instances'].to('cpu')
+        if instance.scores > threshold:
+            bbox = instance.pred_boxes.tensor # x1, y1, x2, y2
+            score = instance.scores
+            pred_classes = instance.pred_classes
+            mask = instance.pred_masks
+
+            cv_mask = mask.numpy().astype('uint8')
+            contours, _ = cv2.findContours(cv_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                if area < small_object_area:
+                    continue
+                coco_dict["annotations"].append({
+                    "segmentation": [contour.flatten().tolist()],
+                    "area": area,
+                    "iscrowd": 0,
+                    "image_id": img_ids[idx],
+                    "bbox": [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]],
+                    "category_id": pred_classes,
+                    "id": label_count,
+                })
+                label_count += 1
+

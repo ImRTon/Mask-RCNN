@@ -3,7 +3,7 @@
 train = dict(
     output_dir="./output",
     init_checkpoint="",
-    max_iter=90000,
+    max_iter=20675,
     amp=dict(enabled=False),  # options for Automatic Mixed Precision
     ddp=dict(  # options for DistributedDataParallel
         broadcast_buffers=False,

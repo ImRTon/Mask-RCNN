@@ -56,12 +56,12 @@ dataloader.train.total_batch_size = 64
 
 # Equivalent to 100 epochs.
 # 100 ep = 184375 iters * 64 images/iter / 118000 images/ep
-train.max_iter = 184375
+train.max_iter = 20675
 
 lr_multiplier = L(WarmupParamScheduler)(
     scheduler=L(MultiStepParamScheduler)(
         values=[1.0, 0.1, 0.01],
-        milestones=[163889, 177546],
+        milestones=[train.max_iter * 0.88, train.max_iter * 0.96],
         num_updates=train.max_iter,
     ),
     warmup_length=500 / train.max_iter,
