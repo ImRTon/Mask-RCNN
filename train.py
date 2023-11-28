@@ -9,7 +9,12 @@ from detectron2.checkpoint import DetectionCheckpointer
 import argparse
 import os
 
+import utils
 import dataset
+
+from pathlib import Path
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train detectron2 Mask-RCNN model',
@@ -30,8 +35,12 @@ def get_args():
 
 if __name__ == "__main__":
     args = get_args()
-    train_dir_path, val_dir_path, test_dir_path = dataset.register_datasets_from_setting(args.input_data)
-    print("Dirs :", train_dir_path, val_dir_path, test_dir_path)
+    # train_dir_path, val_dir_path, test_dir_path = dataset.register_datasets_from_setting(args.input_data)
+    # print("Dirs :", train_dir_path, val_dir_path, test_dir_path)
+    DatasetCatalog.register("train", lambda: utils.get_label(Path(args.input_data) / "detectron2_train.json"))
+    DatasetCatalog.register("val", lambda: utils.get_label(Path(args.input_data) / "detectron2_val.json"))
+    MetadataCatalog.get("train").set(thing_classes=["panel", "bubble", "onomatopoeia", "text", "unkown"])
+    MetadataCatalog.get("val").set(thing_classes=["panel", "bubble", "onomatopoeia", "text", "unkown"])
 
     cfg = get_cfg()
     cfg.merge_from_file(model_zoo.get_config_file(args.model))
@@ -39,10 +48,11 @@ if __name__ == "__main__":
     cfg.DATASETS.TEST = ("val",)
     cfg.DATALOADER.NUM_WORKERS = 8
     cfg.MODEL.WEIGHTS = model_zoo.get_checkpoint_url(args.model)  # Let training initialize from model zoo
-    cfg.SOLVER.IMS_PER_BATCH = 16  # This is the real "batch size" commonly known to deep learning people
-    cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
-    cfg.SOLVER.MAX_ITER = 2000    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
-    cfg.SOLVER.STEPS = []        # do not decay learning rate
+    cfg.SOLVER.IMS_PER_BATCH = 2  # This is the real "batch size" commonly known to deep learning people
+    # cfg.SOLVER.BASE_LR = 0.00025  # pick a good LR
+    cfg.SOLVER.MAX_ITER = 20675 * 2    # 300 iterations seems good enough for this toy dataset; you will need to train longer for a practical dataset
+    cfg.SOLVER.STEPS = [cfg.SOLVER.MAX_ITER * 0.77, cfg.SOLVER.MAX_ITER * 0.92]
+    # cfg.SOLVER.STEPS = []        # do not decay learning rate
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512   # The "RoIHead batch size". 128 is faster, and good enough for this toy dataset (default: 512)
     cfg.MODEL.ROI_HEADS.NUM_CLASSES = 5  # only has one class (ballon). (see https://detectron2.readthedocs.io/tutorials/datasets.html#update-the-config-for-new-datasets)
     # NOTE: this config means the number of classes, but a few popular unofficial tutorials incorrect uses num_classes+1 here.

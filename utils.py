@@ -514,7 +514,7 @@ def filter_instance_masks(outputs, threshold=0.5):
     filtered_instances = instances[instances.scores > threshold]
     return filtered_instances
 
-def get_prediction_2_coco(outputs, img_ids: List[int], coco_dict, threshold: float=0.5, small_object_area: int=0):
+def get_prediction_2_coco(outputs, img_ids: List[int], coco_dict, ori_size=None, threshold: float=0.5, small_object_area: int=0):
     """Get detectron2 output to coco format
 
     Args:
@@ -525,14 +525,17 @@ def get_prediction_2_coco(outputs, img_ids: List[int], coco_dict, threshold: flo
     """    
     label_count = len(coco_dict["annotations"])
     for idx, output in enumerate(outputs):
-        instance = output['instances'].to('cpu')
-        if instance.scores > threshold:
-            bbox = instance.pred_boxes.tensor # x1, y1, x2, y2
+        instances = output['instances'].to('cpu')
+        instances = instances[instances.scores > threshold]
+        for i in range(len(instances)):
+            instance = instances[i]
+            bbox = instance.pred_boxes.tensor[0] # x1, y1, x2, y2
             score = instance.scores
-            pred_classes = instance.pred_classes
+            pred_classes = instance.pred_classes.tolist()[0]
             mask = instance.pred_masks
-
-            cv_mask = mask.numpy().astype('uint8')
+            cv_mask = mask.numpy().astype('uint8').squeeze(0) * 255
+            if ori_size is not None:
+                cv_mask = cv2.resize(cv_mask, (ori_size[0], ori_size[1]), cv2.INTER_NEAREST)
             contours, _ = cv2.findContours(cv_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
             for contour in contours:
@@ -544,9 +547,125 @@ def get_prediction_2_coco(outputs, img_ids: List[int], coco_dict, threshold: flo
                     "area": area,
                     "iscrowd": 0,
                     "image_id": img_ids[idx],
-                    "bbox": [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]],
+                    "bbox": [int(bbox[0]), int(bbox[1]), int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])],
                     "category_id": pred_classes,
                     "id": label_count,
                 })
                 label_count += 1
 
+    return coco_dict
+
+def get_prediction_2_manga(filename: Path, img, outputs, dump_path: Path, manga_dicts, ori_size, size, threshold: float=0.5, small_object_area: int=0):
+    """Get detectron2 output to coco format
+
+    Args:
+        outputs (dict): output of detectron2 model.
+        img_ids (List[int]): image ids.
+        coco_dict (dict): coco format annotation dict.
+        thresh (float, optional): threshold of detection score. Defaults to 0.5.
+    """    
+    PANEL = 0
+    BUBBLE = 1
+    bubble_mask = np.zeros((ori_size[1], ori_size[0]), dtype=np.uint8)
+
+    for idx, output in enumerate(outputs):
+        instances = output['instances'].to('cpu')
+        instances = instances[instances.scores > threshold]
+        
+        for i in range(len(instances)):
+            instance = instances[i]
+            bbox = instance.pred_boxes.tensor[0] # x1, y1, x2, y2
+            score = instance.scores
+            pred_classes = instance.pred_classes.tolist()[0]
+
+            mask = instance.pred_masks
+            cv_mask = mask.numpy().astype('uint8').squeeze(0) * 255
+            if ori_size is not None:
+                cv_mask = cv2.resize(cv_mask, (ori_size[0], ori_size[1]), cv2.INTER_NEAREST)
+            contours, _ = cv2.findContours(cv_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            if pred_classes == PANEL:
+                is_accept = False
+                panel_dict = {
+                    "image_path": f"{filename.stem}_{len(manga_dicts)}.png",
+                    "crop": [],
+                    "prompt": "",
+                    "tags": "",
+                    "annotations": []
+                }
+
+                panel_mask = np.zeros((size[1], size[0]), dtype=np.uint8)
+                cv2.drawContours(panel_mask, contours, contourIdx=-1, color=255, thickness=cv2.FILLED)
+                cv_bbox = [9999, 9999, 0, 0]
+                for contour in contours:
+                    area = cv2.contourArea(contour)
+                    if area < small_object_area:
+                        continue
+                    is_accept = True
+
+                    cv_bbox_pred = cv2.boundingRect(contour)
+                    cv_bbox_pred = (cv_bbox_pred[0], cv_bbox_pred[1], cv_bbox_pred[0] + cv_bbox_pred[2], cv_bbox_pred[1] + cv_bbox_pred[3])
+                    if cv_bbox_pred[0] < cv_bbox[0]:
+                        cv_bbox[0] = cv_bbox_pred[0]
+                    if cv_bbox_pred[1] < cv_bbox[1]:
+                        cv_bbox[1] = cv_bbox_pred[1]
+                    if cv_bbox_pred[2] > cv_bbox[2]:
+                        cv_bbox[2] = cv_bbox_pred[2]
+                    if cv_bbox_pred[3] > cv_bbox[3]:
+                        cv_bbox[3] = cv_bbox_pred[3]
+
+                if is_accept: 
+                    crop_panel = img[int(cv_bbox[1]):int(cv_bbox[3]), int(cv_bbox[0]):int(cv_bbox[2])]
+                    cv2.imwrite(str(dump_path / "images" / f"{filename.stem}_{len(manga_dicts)}.png"), crop_panel)
+                    panel_dict["crop"] = [int(cv_bbox[0]), int(cv_bbox[1]), int(cv_bbox[2] - cv_bbox[0]), int(cv_bbox[3] - cv_bbox[1])]
+                    manga_dicts.append(panel_dict)
+
+            elif pred_classes == BUBBLE:
+                cv2.drawContours(bubble_mask, contours, contourIdx=-1, color=255, thickness=cv2.FILLED)
+
+        for i, manga_dict in enumerate(manga_dicts):
+            crop = manga_dict["crop"]
+            crop_bubble_mask = bubble_mask[crop[1]:crop[1]+crop[3], crop[0]:crop[0]+crop[2]]
+            non0 = cv2.countNonZero(crop_bubble_mask)
+            if non0:
+                cv2.imwrite(str(dump_path / "masks" / f"{filename.stem}_{i}.png"), crop_bubble_mask)
+                contours, _ = cv2.findContours(crop_bubble_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                for contour in contours:
+                    area = cv2.contourArea(contour)
+                    if area < small_object_area:
+                        continue
+                    
+                    manga_dict["annotations"].append(
+                        {
+                            "classID": BUBBLE,
+                            "bbox": cv2.boundingRect(contour),
+                            "area": cv2.contourArea(contour),
+                            "segmentation": [contour.tolist()],
+                        }
+                    )
+
+    return manga_dicts
+
+def find_sub_datasets(input_path: Path):
+    """Look for sub-datasets in the input path.
+
+    Args:
+        input_path (Path): path to look for sub dataset
+
+    Returns:
+        list(Path): list of sub-dataset paths (if any)
+    """
+    sub_datasets = []
+    image_dir_path = input_path / 'OriginSizeManga'
+    bubble_dir_path = input_path / 'OriginSizeBubbles'
+    panel_dir_path = input_path / 'OriginSizePanels'
+
+    if image_dir_path.is_dir() and not (bubble_dir_path.is_dir() and panel_dir_path.is_dir()):
+        sub_datasets.append(input_path)
+    else:
+        for dir in input_path.iterdir():
+            if dir.is_dir():
+                sub_datasets.extend(find_sub_datasets(dir))
+
+    return sub_datasets

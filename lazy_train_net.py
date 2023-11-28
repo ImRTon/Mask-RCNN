@@ -95,8 +95,10 @@ def do_inference_2_coco(model, input_path, output_path, categories):
     img_count = 0
 
     with torch.no_grad():
-        for filename in tqdm(os.listdir(input_path)):
-            if filename.endswith('.jpg') or filename.endswith('.JPG') or filename.endswith('.png'):
+        filenames = tqdm(list(input_path.iterdir()))
+        for filename in filenames:
+            filenames.set_postfix({"filename": filename.name})
+            if filename.suffix.lower() == '.jpg' or filename.suffix.lower() == '.png':
                 original_image = my_utils.get_cv_img_from_PIL(os.path.join(input_path, filename))
                 if True:
                     # whether the model expects BGR inputs or RGB
@@ -104,26 +106,85 @@ def do_inference_2_coco(model, input_path, output_path, categories):
                 o_height, o_width, _ = original_image.shape
 
                 coco["images"].append({
-                    "file_name": filename,
+                    "file_name": str(filename.name),
                     "height": o_height,
                     "width": o_width,
                     "id": img_count
                 })
 
                 scaled_image = my_utils.scale_down_img(original_image, 2048)
+                # scaled_image = original_image
                 height, width, _ = scaled_image.shape
                 image = torch.as_tensor(scaled_image.astype("float32").transpose(2, 0, 1))
 
                 inputs = {"image": image, "height": o_height, "width": o_width}
                 # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
-                outputs = model([inputs])[0]
+                outputs = model([inputs])
 
-                my_utils.get_prediction_2_coco(outputs, [img_count], coco, threshold=0.7, small_object_area=100)
+                my_utils.get_prediction_2_coco(outputs, [img_count], coco, ori_size=(o_width, o_height), threshold=0.7, small_object_area=100)
 
                 img_count += 1
+                
+        with open(output_path, 'w') as f:
+            json.dump(coco, f)
 
-    with open(output_path, 'w') as f:
-        json.dump(coco, f)
+def do_inference_2_manga(model, input_path, output_path, categories):
+    model.eval()
+
+    (output_path.parent / "images").mkdir(parents=True, exist_ok=True)
+    (output_path.parent / "masks").mkdir(parents=True, exist_ok=True)
+    manga_label = {
+        "name": f"Manga MViT dataset",
+        "prompt": "",
+        "datas": []
+    }
+    manga_datas = manga_label["datas"]
+
+    # {
+    #     "image_path": "AoNoEkusoshisuto/9/34/OriginSizeManga/AoNoEkusoshisuto_9_34_043.png",
+    #     "crop": [x, y, w, h],
+    #     "prompt": "",
+    #     "tags": [],
+    #     "annotations": [
+    #         {
+    #             "classID": int,
+    #             "bbox": [x, y, w, h],
+    #             "area": cv2.contourArea(contour),
+    #             "segmentation": [contour.tolist()],
+    #         },
+    #     ],
+    # }
+
+    img_count = 0
+
+    with torch.no_grad():
+        filenames = tqdm(list(input_path.iterdir()))
+        for filename in filenames:
+            filenames.set_postfix({"filename": filename.name})
+            if filename.suffix.lower() == '.jpg' or filename.suffix.lower() == '.png':
+                original_image = my_utils.get_cv_img_from_PIL(os.path.join(input_path, filename))
+                if True:
+                    # whether the model expects BGR inputs or RGB
+                    original_image = original_image[:, :, ::-1]
+                o_height, o_width, _ = original_image.shape
+
+                scaled_image = my_utils.scale_down_img(original_image, 2048)
+                # scaled_image = original_image
+                height, width, _ = scaled_image.shape
+                image = torch.as_tensor(scaled_image.astype("float32").transpose(2, 0, 1))
+
+                inputs = {"image": image, "height": o_height, "width": o_width}
+                # format is documented at https://detectron2.readthedocs.io/tutorials/models.html#model-output-format
+                outputs = model([inputs])
+
+                currnet_datas = []
+                my_utils.get_prediction_2_manga(filename, original_image, outputs, output_path.parent, currnet_datas, ori_size=(o_width, o_height), size=(width, height), threshold=0.7, small_object_area=100)
+                manga_datas.extend(currnet_datas)
+
+                img_count += 1
+                
+        with open(output_path, 'w') as f:
+            json.dump(manga_label, f)
 
 def do_train(args, cfg):
     """
@@ -209,12 +270,40 @@ def main(args):
     default_setup(cfg, args)
 
     if args.eval_only:
+        categories = [
+            {
+                "supercategory": "manga",
+                "id": 0,
+                "name": "panel"
+            }, {
+                "supercategory": "manga",
+                "id": 1,
+                "name": "bubble"
+            }, {
+                "supercategory": "manga",
+                "id": 2,
+                "name": "onomatopoeia"
+            }, {
+                "supercategory": "manga",
+                "id": 3,
+                "name": "text"
+            }, {
+                "supercategory": "unkown",
+                "id": 4,
+                "name": "unkwon"
+            }
+        ]
         model = instantiate(cfg.model)
         model.to(cfg.train.device)
         model = create_ddp_model(model)
         DetectionCheckpointer(model).load(cfg.train.init_checkpoint)
-        if args.output_2_coco:
-            do_inference_2_coco(model, args.input_data, args.output_dir)
+        if args.output_type.lower() == "coco":
+            dataset_paths = tqdm(my_utils.find_sub_datasets(Path(args.input_data)))
+            for dataset_path in dataset_paths:
+                dataset_paths.set_postfix({"dataset": dataset_path})
+                do_inference_2_coco(model, dataset_path / "OriginSizeManga", dataset_path / "coco_pred.json", categories)
+        elif args.output_type.lower() == "manga":
+            do_inference_2_manga(model, Path(args.input_data), Path(args.output_dir) / "manga_pred.json", categories)
         else:
             do_inference(model, args.input_data, args.output_dir)
         # print(do_test(cfg, model))
@@ -230,7 +319,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_dir', '-o', default='Root dir of input dataset',
                         metavar='FILE', required=True,
                         help="Specify the file in which the annotation is stored")
-    parser.add_argument('--output-2-coco', '-co', action='store_true', 
+    parser.add_argument('--output_type', '-ot', type=str, default='coco',
                         help='Output detection result to coco format')
     args = parser.parse_args()
     launch(
